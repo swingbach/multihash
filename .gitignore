@@ -2,3 +2,5 @@
 *.o
 *~
 mh
+multihash
+scores

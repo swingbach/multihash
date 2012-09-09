@@ -13,7 +13,7 @@ typedef struct
 
 mul_hashtable_t *mul_hashtable_create(unsigned rows, unsigned cols, unsigned cell_size);
 
-char *mul_hashtable_lookup(mul_hashtable_t *table, char *key);
+char *mul_hashtable_lookup(mul_hashtable_t *table, char *key, unsigned *times);
 
 int mul_hashtable_insert(mul_hashtable_t *table, char *key, char *value);
 #endif
