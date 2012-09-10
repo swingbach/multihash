@@ -19,7 +19,7 @@ tc_hashtable_create(unsigned total, unsigned cell_size)
 	tc_hashtable_t *table = calloc(1, sizeof(tc_hashtable_t));
 	assert(table);
 
-	table->total     = tc_find_max_prime_lt(total);
+	table->total     = total;
 	table->cell_size = cell_size;
 
 	table->mem = calloc(1, table->total * cell_size);
@@ -34,8 +34,8 @@ tc_hashtable_create(unsigned total, unsigned cell_size)
  */
 static int tc_find_hash_slot(tc_hashtable_t *table, unsigned slot, char **cell, char *key)
 {
-	int found = 0 
-	char *tmp;
+	int found = 0;
+	char *tmp = NULL;
 
 	*cell = NULL;
 
@@ -55,10 +55,32 @@ ret:
 	return found;
 }
 
+static void tc_set_hash_slot(tc_hashtable_t *table, unsigned slot, char *key, char *value)
+{
+	int klen, vlen;
+	char *tmp;
+
+	tmp = (unsigned char *)table->mem + slot * table->cell_size;
+
+	assert(*tmp == 0 || strcmp(tmp, key) == 0);
+
+	klen = strlen(key);
+	vlen = strlen(value);
+
+	assert(klen < 16);
+	assert(vlen < 16);
+
+	memcpy(tmp, key, klen);
+	tmp[klen] = '\0';
+
+	memcpy(tmp + klen + 1, value, vlen);
+
+}
+
 char *tc_hashtable_lookup(tc_hashtable_t *table, char *key, unsigned *times)
 {
-	int s;
-	unsigned hash, r, q, hs;
+	long r, q, hs;
+	unsigned long hash, s;
 	char *cell = NULL;
 
 	*times = 1;
@@ -77,6 +99,8 @@ char *tc_hashtable_lookup(tc_hashtable_t *table, char *key, unsigned *times)
         if (hs < 0)
             continue;
 
+		*times++;
+
 		if (tc_find_hash_slot(table, hs, &cell, key))
 			break;
     }
@@ -87,40 +111,38 @@ ret:
 
 int tc_hashtable_insert(tc_hashtable_t *table, char *key, char *value)
 {
-	int n, ret = -1;
-	size_t roff, coff;
-	unsigned prime, hash;
-	char *cell = NULL, *tmp;
-	
+	int ret = -1;
+	long r, q, hs;
+	unsigned long hash, s;
+	char *cell = NULL;
+
 	hash = tc_hash(key);
 
-	for (n = 0; n < table->rows; n++) {
-		prime = table->prime[n];
-		
-		roff = n * (table->cols * table->cell_size);
-		coff = (hash % prime) * table->cell_size;
+	//h1(key)
+	r = hash % table->total;
+	
+	if (tc_find_hash_slot(table, r, &cell, key)) {
+		tc_set_hash_slot(table, r, key, value);
+		ret = 0;
+		goto exit;
+	}
 
-		tmp = ((unsigned char *)table->mem + roff + coff);
-		
-		if (*tmp == 0 || strcmp(tmp, key) == 0) {
-			cell = tmp;
+	// h2(key)
+    q = hash % (table->total - 2) + 1;
+    for (s = 0; s < table->total; ++s) {
+        hs = labs((r + s * q) % table->total);
+        if (hs < 0)
+            continue;
+
+		if (tc_find_hash_slot(table, hs, &cell, key)) {
+			tc_set_hash_slot(table, hs, key, value);
+			ret = 0;
 			break;
 		}
-	}
+	
+    }
 
-	if (cell) {
-		int klen, vlen;
-
-		klen = strlen(key);
-		vlen = strlen(value);
-		
-		memcpy(cell, key, klen);
-		cell[klen] = '\0';
-		memcpy(cell + klen + 1, value, vlen);
-
-		ret = 0;
-	}
-
+exit:
 	return ret;
 }
 
@@ -163,7 +185,7 @@ static unsigned tc_hash(const unsigned char *buf) {
 
 static void usage()
 {
-	fprintf(stdout, "usage: ./tctihash <rows> <cols> <cell_size> <fill_factor>\n");
+	fprintf(stdout, "usage: ./tchash <totals> <cell_size> <fill_factor>\n");
 	exit(1);
 }
 
@@ -172,27 +194,26 @@ int main(int argc, char **argv)
 	unsigned int *stats;
 	unsigned times, n;
 	tc_hashtable_t *table;
-	unsigned rows, cols, cell_size, fill_factor;
+	unsigned totals, cell_size, fill_factor;
 	unsigned long cells_total, cells_fill_total;
 	char *lines;
 
-	if (argc != 5) 
+	if (argc != 4) 
 		usage();
 	
-	rows        = atoi(argv[1]);
-	cols        = atoi(argv[2]);
-	cell_size   = atoi(argv[3]);
-	fill_factor = atoi(argv[4]);
+	totals      = atoi(argv[1]);
+	cell_size   = atoi(argv[2]);
+	fill_factor = atoi(argv[3]);
 
-	cells_total = rows * cols;
+	cells_total = tc_find_max_prime_lt(totals);
 	cells_fill_total = (fill_factor * cells_total) / 100;
 
 	printf("prepare to fill table, cells = %lu, cells fill = %lu\n\n", cells_total, cells_fill_total);
 
-	table = tc_hashtable_create(rows, cols, cell_size);
+	table = tc_hashtable_create(cells_total, cell_size);
 	assert(table);
 
-	stats = calloc(15, sizeof(unsigned int));
+	stats = calloc(30, sizeof(unsigned int));
 
 	//fill hashtable
 	srand(100);
@@ -202,7 +223,10 @@ int main(int argc, char **argv)
 		len = snprintf(key, 32, "%d\0", rand());
 		assert(len < 32); // assert no truncate happens
 
-		assert(tc_hashtable_insert(table, key, "v") == 0);
+		if (tc_hashtable_insert(table, key, "v") != 0) {
+			fprintf(stdout, "failed to find a slot to insert n = %d\n", n);
+			exit(1);
+		}
 	}
 
 	//lookup data,stats times
@@ -217,8 +241,8 @@ int main(int argc, char **argv)
 		lines = tc_hashtable_lookup(table, key, &times);
 		assert(strcmp(lines, key) == 0);
 
-		if (times > 15)
-			times = 15;
+		if (times > 30)
+			times = 30;
 
 		stats[times - 1]++;
 	}
