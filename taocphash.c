@@ -191,7 +191,7 @@ static void usage()
 
 int main(int argc, char **argv)
 {
-	unsigned int *stats;
+	unsigned int *stats, max_times = 1;
 	unsigned times, n;
 	tc_hashtable_t *table;
 	unsigned totals, cell_size, fill_factor;
@@ -241,6 +241,9 @@ int main(int argc, char **argv)
 		lines = tc_hashtable_lookup(table, key, &times);
 		assert(strcmp(lines, key) == 0);
 
+		if (times > max_times) 
+			max_times = times;
+
 		if (times > 30)
 			times = 30;
 
@@ -253,5 +256,5 @@ int main(int argc, char **argv)
 		printf("lookup times = %d : count = %d, hit %.1f%%\n", n + 1, stats[n], (stats[n] / (float)cells_fill_total) * 100);
 	}
 	printf("lookup times > %d : count = %d, hit %.1f%%\n", n + 1, stats[n], (stats[n] / (float)cells_fill_total) * 100);
-
+	printf("========================\n max lookup times = %d\n", max_times);
 }
