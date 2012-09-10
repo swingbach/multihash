@@ -94,12 +94,12 @@ char *tc_hashtable_lookup(tc_hashtable_t *table, char *key, unsigned *times)
 
 	// h2(key)
     q = hash % (table->total - 2) + 1;
-    for (s = 0; s < table->total; ++s) {
+    for (s = 1; s < table->total; ++s) {
         hs = labs((r + s * q) % table->total);
         if (hs < 0)
             continue;
 
-		*times++;
+		(*times)++;
 
 		if (tc_find_hash_slot(table, hs, &cell, key))
 			break;
@@ -129,7 +129,7 @@ int tc_hashtable_insert(tc_hashtable_t *table, char *key, char *value)
 
 	// h2(key)
     q = hash % (table->total - 2) + 1;
-    for (s = 0; s < table->total; ++s) {
+    for (s = 1; s < table->total; ++s) {
         hs = labs((r + s * q) % table->total);
         if (hs < 0)
             continue;
@@ -249,7 +249,7 @@ int main(int argc, char **argv)
 
 	//output stats
 	printf("=============output stats===============\n");
-	for (n = 0; n < 14; n++) {
+	for (n = 0; n < 29; n++) {
 		printf("lookup times = %d : count = %d, hit %.1f%%\n", n + 1, stats[n], (stats[n] / (float)cells_fill_total) * 100);
 	}
 	printf("lookup times > %d : count = %d, hit %.1f%%\n", n + 1, stats[n], (stats[n] / (float)cells_fill_total) * 100);
